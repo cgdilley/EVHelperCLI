@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sprelf-ev-helper-cli"
+version = "2026.09.12.0"
+authors = [
+    { name = "Christopher Dilley", email = "me@sprelf.com" }
+]
+description = "Core definitions for Pokémon entities"
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent"
+]
+dependencies = [
+    "sprelf-pokemon-core",
+    "httpx",
+    "sprelf-json[yaml]"
+]
+license = "GPL-3.0-only"
+license-files = ["LICEN[SC]E.*"]
+
+
+[project.urls]
+repository = "https://github.com/cgdilley/EVHelperCLI"
+
+
+[tool.uv.sources]
+sprelf-pokemon-core = { workspace = true }
+#sprelf-pokemon-core = { path = "../Core", editable = true }
