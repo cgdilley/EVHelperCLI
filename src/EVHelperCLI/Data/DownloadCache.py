@@ -111,7 +111,7 @@ class DownloadCache:
     @classmethod
     def _download_common_sets(cls, pokemon: str) -> CommonSetsCache | None:
         if pokemon == "Floette":
-            normalized = "floetteform5"
+            normalized = "floette-eternal"
         elif pokemon == "Maushold":
             normalized = "mausholdform1"
         elif pokemon == "Vivillon":

@@ -47,14 +47,40 @@ class NotableCalculations:
                   *,
                   cutoff: float = 0.2,
                   weathers: set[Weather] | None = None,
-                  terrains: set[Terrain] | None = None) -> Iterable[NotableCalc]:
+                  terrains: set[Terrain] | None = None,
+                  calc_defensive: bool = True,
+                  calc_offensive: bool = True) -> Iterable[NotableCalc]:
         for pokemon in team:
             for top_set in top_usage:
-                yield from cls.calculate_for_pairing(pokemon=pokemon, top_set=top_set, cutoff=cutoff,
-                                                     weathers=weathers, terrains=terrains)
+                yield from cls.calculate_for_top_set(pokemon=pokemon, top_set=top_set, cutoff=cutoff,
+                                                     weathers=weathers, terrains=terrains,
+                                                     calc_defensive=calc_defensive, calc_offensive=calc_offensive)
 
     @classmethod
-    def calculate_for_pairing(cls, pokemon: Pokemon,
+    def calculate_matchup(cls, player: Pokemon,
+                          target: Pokemon,
+                          board_state: BoardState,
+                          *,
+                          calc_defensive: bool = True,
+                          calc_offensive: bool = True) -> Iterable[NotableCalc]:
+        player_state = PokemonState.fresh(player, 0, 0)
+        target_state = PokemonState.fresh(target, 1, 0)
+
+        if calc_offensive:
+            for move in player.moveset:
+                if not isinstance(move, DamagingMove):
+                    continue
+                report = calculate_damage(attacker=player_state, defender=target_state, move=move, board_state=board_state)
+                yield NotableCalc(report=report, offensive=True)
+        if calc_defensive:
+            for move in target.moveset:
+                if not isinstance(move, DamagingMove):
+                    continue
+                report = calculate_damage(attacker=target_state, defender=player_state, move=move, board_state=board_state)
+                yield NotableCalc(report=report, offensive=False)
+
+    @classmethod
+    def calculate_for_top_set(cls, pokemon: Pokemon,
                               top_set: TopSet,
                               *,
                               cutoff: float = 0.2,
@@ -65,7 +91,9 @@ class NotableCalculations:
                               terrains: set[Terrain] | None = None,
                               spreads: list[dict[Stat, StatPoint]] | None = None,
                               natures: set[Nature] | None = None,
-                              critical: bool = False) -> Iterable[NotableCalc]:
+                              critical: bool = False,
+                              calc_defensive: bool = True,
+                              calc_offensive: bool = True) -> Iterable[NotableCalc]:
         items = items or [i.item for i in top_set.sets.items if i.percent >= cutoff]
         abilities = abilities or [i.ability for i in top_set.sets.abilities if i.percent >= cutoff]
         moves = moves or [i.move for i in top_set.sets.moves if i.percent >= cutoff]
@@ -79,34 +107,36 @@ class NotableCalculations:
         natures = natures or {n.nature for n in top_set.sets.natures if n.percent >= cutoff}
 
         # Defensive calcs
-        yield from cls._run_calculations(
-            pokemon=pokemon,
-            top_set=top_set,
-            offensive=False,
-            options=_CalcOptions(
-                moves=damaging_moves,
-                weathers=weathers,
-                terrains=terrains,
-                items=items,
-                abilities=abilities,
-                spreads=spreads,
-                natures=natures,
-                critical=critical))
+        if calc_defensive:
+            yield from cls._filter_defensive(cls._run_calculations(
+                pokemon=pokemon,
+                top_set=top_set,
+                offensive=False,
+                options=_CalcOptions(
+                    moves=damaging_moves,
+                    weathers=weathers,
+                    terrains=terrains,
+                    items=items,
+                    abilities=abilities,
+                    spreads=spreads,
+                    natures=natures,
+                    critical=critical)))
 
         # Offensive calcs
-        yield from cls._run_calculations(
-            pokemon=pokemon,
-            top_set=top_set,
-            offensive=True,
-            options=_CalcOptions(
-                moves=[m for m in pokemon.moveset.moves if isinstance(m, DamagingMove)],
-                weathers=weathers,
-                terrains=terrains,
-                items=items,
-                abilities=abilities,
-                spreads=spreads,
-                natures=natures,
-                critical=critical))
+        if calc_offensive:
+            yield from cls._filter_offensive(cls._run_calculations(
+                pokemon=pokemon,
+                top_set=top_set,
+                offensive=True,
+                options=_CalcOptions(
+                    moves=[m for m in pokemon.moveset.moves if isinstance(m, DamagingMove)],
+                    weathers=weathers,
+                    terrains=terrains,
+                    items=items,
+                    abilities=abilities,
+                    spreads=spreads,
+                    natures=natures,
+                    critical=critical)))
 
     @classmethod
     def _infer_weathers(cls, *abilities: Ability) -> set[Weather]:
@@ -177,7 +207,7 @@ class NotableCalculations:
         pokemon_state = PokemonState.fresh(pokemon, team=0, slot=0)
         unique_roll_sets: set[tuple[int, ...]] = set()
 
-        for selection in cls._iterate_combinations(offensive=False, options=options):
+        for selection in cls._iterate_combinations(offensive=offensive, options=options):
             other_mon = Pokemon(data=top_set.entry.pokemon,
                                 moveset=MoveSet(moves=[selection.move]),
                                 typing=top_set.entry.pokemon.typing,
@@ -200,12 +230,13 @@ class NotableCalculations:
                 report = calculate_damage(attacker=pokemon_state, defender=other_state,
                                           move=selection.move, board_state=state, critical=options.critical)
             else:
+                # other_state.stats.add_modifiers(StatModifier(stat=Stat.ATTACK, modifier=-1))
                 report = calculate_damage(attacker=other_state, defender=pokemon_state,
                                           move=selection.move, board_state=state, critical=options.critical)
             roll_key = tuple(report.rolls)
             if roll_key not in unique_roll_sets and cls._is_notable_calc(report):
                 unique_roll_sets.add(roll_key)
-                yield NotableCalc(report=report, offensive=False)
+                yield NotableCalc(report=report, offensive=offensive)
 
     @classmethod
     def _get_relevant_natures(cls, natures: Iterable[Nature], stat: Stat) -> Iterable[Nature]:
@@ -230,6 +261,16 @@ class NotableCalculations:
         hits, perc = report.get_knockout_prognosis()
         if hits == 1 and low_perc <= 1.1:
             return True
-        if hits == 2 and high_perc >= 0.9:
+        if hits == 2 and (high_perc >= 0.9 or low_perc < 0.55):
+            return True
+        if hits == 3 and high_perc >= 0.45:
             return True
         return False
+
+    @classmethod
+    def _filter_defensive(cls, calcs: Iterable[NotableCalc]) -> Iterable[NotableCalc]:
+        yield from calcs
+
+    @classmethod
+    def _filter_offensive(cls, calcs: Iterable[NotableCalc]) -> Iterable[NotableCalc]:
+        yield from calcs
