@@ -10,22 +10,22 @@ from EVHelperCLI.Calculations.SpeedTiers import SpeedTiers, SpeedCalc
 class NotableCalcTests(TestCase):
 
     def test_notable_calc(self):
-        paste = """Raichu-Mega-Y @ Raichunite Y  
-Ability: Lightning Rod  
+        paste = """Incineroar @ Sitrus Berry  
+Ability: Intimidate  
 Level: 50  
-EVs: 14 HP / 29 Def / 23 Spe  
-Timid Nature  
-- Protect  
-- Zap Cannon  
-- Fake Out  
-- Focus Blast
+EVs: 30 HP / 5 Atk / 16 SpD / 15 Spe  
+Adamant Nature  
+- Flare Blitz  
+- Darkest Lariat  
+- Parting Shot  
+- Fake Out
 """
         pokemon = parse_pokepaste(paste, Database.get_pokemon(), Database.get_moves())
 
         provider = UsageDataProvider()
         top_sets = provider.top_common_sets(limit=40)
 
-        results = NotableCalculations.calculate(team=pokemon, top_usage=top_sets, calc_defensive=False,)
+        results = NotableCalculations.calculate(team=pokemon, top_usage=top_sets, calc_offensive=False,)
         closest_survival: tuple[NotableCalc, float] | None = None
         closest_ohko: tuple[NotableCalc, float] | None = None
         for calc in results:
@@ -46,7 +46,7 @@ Timid Nature
         paste = """Raichu-Mega-Y @ Raichunite Y  
 Ability: Lightning Rod  
 Level: 50  
-EVs: 14 HP / 29 Def / 23 Spe  
+EVs: 14 HP / 28 Def / 24 Spe  
 Timid Nature  
 - Protect  
 - Zap Cannon  
@@ -71,6 +71,7 @@ EVs: 32 SpA
  - Draco Meteor
  
 Golisopod-Mega
+EVs: 32 Atk
 Adamant Nature
  - Leech Life
 
@@ -123,65 +124,59 @@ Adamant Nature
                     print(str(calc.report))
 
     def test_speed_tiers(self):
-        paste = """Raichu-Mega-Y @ Raichunite Y  
-Ability: Lightning Rod  
-Level: 50  
-EVs: 14 HP / 29 Def / 23 Spe  
-Timid Nature  
-- Protect  
-- Zap Cannon  
-- Fake Out  
-- Focus Blast  
+        paste = """Gholdengo @ Life Orb
+Ability: Good as Gold
+EVs: 17 hp / 1 def / 13 spa / 21 spd / 14 spe
+Modest Nature
+- Protect
+- Shadow Ball
+- Nasty Plot
+- Make It Rain
 
-Salamence-Mega @ Salamencite  
-Ability: Intimidate  
-Level: 50  
-EVs: 23 HP / 11 SpA / 32 Spe  
-Timid Nature  
-- Protect  
-- Hyper Voice  
-- Tailwind  
-- Draco Meteor  
+Volcarona @ Rocky Helmet
+Ability: Flame Body
+EVs: 32 hp / 16 def / 1 spd / 17 spe
+Timid Nature
+- Overheat
+- Struggle Bug
+- Rage Powder
+- Tailwind
 
-Arcanine-Hisui @ Focus Sash  
-Ability: Rock Head  
-Level: 50  
-EVs: 2 HP / 32 Atk / 32 Spe  
-Jolly Nature  
-- Protect  
-- Flare Blitz  
-- Extreme Speed  
-- Head Smash  
+Garchomp-Mega-Z @ Garchompite Z
+Ability: Rough Skin
+EVs: 12 hp / 21 spa / 1 spd / 32 spe
+Modest Nature
+- Dragon Pulse
+- Earth Power
+- Power Gem
+- Protect
 
-Sylveon @ Fairy Feather  
-Ability: Pixilate  
-Level: 50  
-EVs: 9 HP / 22 Def / 20 SpA / 15 Spe  
-Modest Nature  
-- Detect  
-- Hyper Voice  
-- Quick Attack  
-- Hyper Beam  
+Incineroar @ Sitrus Berry
+Ability: Intimidate
+EVs: 31 hp / 20 def / 13 spd / 2 spe
+Impish Nature
+- Parting Shot
+- Fake Out
+- Flare Blitz
+- Darkest Lariat
 
-Gholdengo @ Life Orb  
-Ability: Good as Gold  
-Level: 50  
-EVs: 17 HP / 17 SpA / 32 Spe  
-Timid Nature  
-- Protect  
-- Make It Rain  
-- Nasty Plot  
-- Shadow Ball  
+Rillaboom @ Miracle Seed
+Ability: Grassy Surge
+EVs: 25 hp / 10 atk / 1 def / 30 spd
+Adamant Nature
+- Grassy Glide
+- Wood Hammer
+- Fake Out
+- U-turn
 
-Rillaboom @ Miracle Seed  
-Ability: Grassy Surge  
-Level: 50  
-EVs: 18 HP / 25 Atk / 5 Def / 10 SpD / 8 Spe  
-Adamant Nature  
-- Wood Hammer  
-- Grassy Glide  
-- High Horsepower  
-- Fake Out  
+Raichu-Mega-Y @ Raichunite Y
+Ability: Lightning Rod
+EVs: 29 hp / 5 def / 32 spe
+Timid Nature
+- Zap Cannon
+- Focus Blast
+- Fake Out
+- Protect
 """
         pokemon = parse_pokepaste(paste, Database.get_pokemon(), Database.get_moves())
 

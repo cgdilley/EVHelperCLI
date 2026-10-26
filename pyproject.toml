@@ -10,7 +10,7 @@ authors = [
 ]
 description = "Core definitions for Pokémon entities"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.12"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent"
@@ -26,6 +26,9 @@ license-files = ["LICEN[SC]E.*"]
 
 [project.urls]
 repository = "https://github.com/cgdilley/EVHelperCLI"
+
+[project.scripts]
+sprelfpkmn = "EVHelperCLI.CLI.CLI:main"
 
 
 [tool.uv.sources]

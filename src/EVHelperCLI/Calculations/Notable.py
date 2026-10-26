@@ -101,7 +101,7 @@ class NotableCalculations:
         if not weathers:
             weathers = cls._infer_weathers(pokemon.ability, *abilities)
         if not terrains:
-            terrains = cls._infer_terrains(pokemon.ability, *abilities)
+            terrains = cls._infer_terrains(abilities=(pokemon.ability, *abilities), moves=moves)
 
         spreads = spreads or [s.evs for s in top_set.sets.spreads[:5]]
         natures = natures or {n.nature for n in top_set.sets.natures if n.percent >= cutoff}
@@ -153,14 +153,14 @@ class NotableCalculations:
         return weathers
 
     @classmethod
-    def _infer_terrains(cls, *abilities: Ability) -> set[Terrain]:
+    def _infer_terrains(cls, abilities: Iterable[Ability], moves: Iterable[Move]) -> set[Terrain]:
         all_abilities = {a.name for a in abilities}
         terrains = {Terrain.NONE}
         if "Grassy Surge" in all_abilities:
             terrains.add(Terrain.GRASSY)
         if "Electric Surge" in all_abilities:
             terrains.add(Terrain.ELECTRIC)
-        if "Psychic Surge" in all_abilities:
+        if "Psychic Surge" in all_abilities: # or "Expanding Force" in [m.name for m in moves]:
             terrains.add(Terrain.PSYCHIC)
         if "Misty Surge" in all_abilities:
             terrains.add(Terrain.MISTY)

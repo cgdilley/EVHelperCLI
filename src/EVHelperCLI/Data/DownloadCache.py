@@ -113,9 +113,9 @@ class DownloadCache:
         if pokemon == "Floette":
             normalized = "floette-eternal"
         elif pokemon == "Maushold":
-            normalized = "mausholdform1"
+            normalized = "maushold-four"
         elif pokemon == "Vivillon":
-            normalized = "vivillonfancypattern"
+            normalized = "vivillon-fancy"
         else:
             normalized = cls.NORMALIZER_REGEX.sub("", pokemon).lower()
         url = f"https://championsbattledata.com/api/battle/Doubles/{normalized}"
