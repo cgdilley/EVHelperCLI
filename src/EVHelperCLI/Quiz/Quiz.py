@@ -152,10 +152,20 @@ class ConsoleOutput(QuizOutput):
 
 class ConsoleInput(QuizInput):
     def collect(self, reticle: str = "? ", **kwargs) -> str:
-        answer = input(colorize(reticle, Style.BOLD, Style.CYAN))
+        answer = input(colorize(reticle, Style.BOLD, Style.BRIGHT_GREEN))
         if answer.lower() in ("quit", "exit"):
             raise StopIteration()
         return answer
+
+
+class CompoundQuizOutput(QuizOutput):
+
+    def __init__(self, *outputs: QuizOutput):
+        self._outputs = outputs
+
+    def render(self, text: str, **kwargs):
+        for output in self._outputs:
+            output.render(text, **kwargs)
 
 
 #
@@ -176,6 +186,14 @@ class Quiz(Iterator[TPrompt], Generic[TPrompt], ABC):
         self._current = n
         return n
 
+    @property
+    def output(self) -> QuizOutput:
+        return self._output
+
+    @property
+    def input(self) -> QuizInput:
+        return self._input
+
     @abstractmethod
     def _get_next(self) -> TPrompt | None:
         ...
@@ -194,19 +212,30 @@ class Quiz(Iterator[TPrompt], Generic[TPrompt], ABC):
 
     def run(self):
         for p in self:
-            self._prompt(p)
+            try:
+                self._prompt(p)
+            except (StopIteration, KeyboardInterrupt, EOFError):
+                self._output.render("Exiting quiz early...")
+                break
+        self._output.render("\n" + self.render_score())
 
     def _prompt(self, p: TPrompt):
         self._output.render(p.get_prompt())
         answer = self._input.collect()
         result = p.validate(answer)
         self.set_result(result)
-        if result.result != AnswerType.CORRECT:
-            feedback = p.get_feedback(result)
-            if feedback:
-                self._output.render(
-                    f"{colorize('Correct answer:', Style.BOLD, Style.YELLOW)} {colorize(feedback, Style.GREEN)}"
-                )
+
+        if result.result == AnswerType.CORRECT:
+            self._output.render(f"✓ Correct! (+{result.value:.1f} pts)")
+        elif result.result == AnswerType.PARTIAL:
+            self._output.render(f"~ Partial Credit! (+{result.value:.2f} pts)")
+        else:
+            self._output.render(f"✗ Incorrect (+0.0 pts)")
+
+        feedback = p.get_feedback(result)
+        if feedback:
+            self._output.render(feedback)
+        self._output.render("")
 
     def score(self) -> float:
         return sum(r.value for _, _, r in self._history) / len(self._history)
@@ -252,6 +281,11 @@ class NumberedQuiz(Quiz[TPrompt], ABC):
     @abstractmethod
     def _generate_prompt(self) -> TPrompt:
         ...
+
+    def _prompt(self, p: TPrompt):
+        curr_pos = self._generated_count
+        self.output.render(f"[Question {curr_pos}/{self.question_count}]")
+        super()._prompt(p)
 
     def render_score(self) -> str:
         total = len(self._history)

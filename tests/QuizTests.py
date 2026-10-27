@@ -108,14 +108,19 @@ class QuizTests(TestCase):
         self.assertEqual(prompt2.validate(">").result, AnswerType.INCORRECT)
 
     def test_same_base_stat_prompt(self):
-        # Garchomp base Speed: 102
-        prompt = SameBaseStatPrompt(pokemon=self.garchomp, stat=Stat.SPEED, target_value=102)
+        prompt = SameBaseStatPrompt(
+            pokemon=self.garchomp,
+            stat=Stat.SPEED,
+            target_value=102,
+            options=["Garchomp", "Pikachu", "Delphox", "Salamence", "Rillaboom"],
+            correct_option="Delphox",
+        )
 
-        # Cannot name Garchomp itself
-        self.assertEqual(prompt.validate("Garchomp").result, AnswerType.INCORRECT)
-
-        # Test another pokemon with 102 Speed (e.g. Delphox, Porygon-Z, etc.) or test invalid
-        self.assertEqual(prompt.validate("Pikachu").result, AnswerType.INCORRECT)
+        self.assertIn("A) Garchomp", prompt.get_prompt())
+        self.assertEqual(prompt.validate("C").result, AnswerType.CORRECT)
+        self.assertEqual(prompt.validate("3").result, AnswerType.CORRECT)
+        self.assertEqual(prompt.validate("delphox").result, AnswerType.CORRECT)
+        self.assertEqual(prompt.validate("A").result, AnswerType.INCORRECT)
         self.assertEqual(prompt.validate("NotARealPokemon").result, AnswerType.INCORRECT)
 
     def test_adjusted_stat_value_prompt(self):

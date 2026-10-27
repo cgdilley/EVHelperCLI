@@ -505,7 +505,7 @@ class DamageCalcQuiz(NumberedQuiz[DamageCalcQuizPrompt]):
             self.top_sets = list(top_sets)
         else:
             provider = UsageDataProvider()
-            self.top_sets = provider.top_common_sets(limit=30)
+            self.top_sets = provider.top_common_sets(limit=75)
 
     def _generate_prompt(self) -> DamageCalcQuizPrompt:
         attacker, defender, move, board, report = generate_scenario(self.top_sets)

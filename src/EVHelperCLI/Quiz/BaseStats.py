@@ -13,14 +13,12 @@ from SprelfPkmn import (
 from SprelfPkmn.Objects.Stats import NATURE_MAP, NUMBER_STATS
 
 from EVHelperCLI.Quiz.Quiz import NumberedQuiz, QuizPrompt, PromptResult, partial_credit, Style, colorize
-from EVHelperCLI.Quiz.Common import format_stat_name, parse_first_int
+from EVHelperCLI.Quiz.Common import format_stat_name, parse_first_int, normalize_name
 from EVHelperCLI.Data.Provider import UsageDataProvider
 from EVHelperCLI.Data.Database import Database
 
-
 HINT_COMPARE = "Enter >, <, or = (or 'greater', 'lesser', 'equal'):"
 HINT_EV_NATURE = "(e.g., '32 Jolly' or '0 Modest')"
-
 
 NATURE_NAME_TO_NATURE: dict[str, Nature] = {
     name.lower(): getattr(Nature, name.upper())
@@ -44,6 +42,15 @@ def pick_weighted_stat(rng: random.Random | None = None) -> Stat:
     stats = list(STAT_WEIGHTS.keys())
     weights = [STAT_WEIGHTS[s] for s in stats]
     return r.choices(stats, weights=weights, k=1)[0]
+
+
+def is_stat_ignored(p: PokemonData, stat: Stat) -> bool:
+    if stat not in (Stat.ATTACK, Stat.SP_ATTACK):
+        return False
+    atk = p.stats.get_stat(Stat.ATTACK)
+    spa = p.stats.get_stat(Stat.SP_ATTACK)
+    own, other = (atk, spa) if stat == Stat.ATTACK else (spa, atk)
+    return other - own >= 30 and own < 100
 
 
 class BaseStatsQuizPrompt(QuizPrompt, ABC):
@@ -127,66 +134,57 @@ class CompareBaseStatPrompt(BaseStatsQuizPrompt):
         return PromptResult.as_incorrect(answer)
 
 
+OPTION_LABELS = "ABCDE"
+
+
 class SameBaseStatPrompt(BaseStatsQuizPrompt):
     pokemon: PokemonData
     stat: Stat
     target_value: int
+    options: list[str] = []
+    correct_option: str = ""
 
     def get_prompt(self) -> str:
         stat_name = format_stat_name(self.stat)
-        return (
-            f"{colorize('Name another Pokémon that has the same base', Style.BOLD)} "
+        lines = [
+            f"{colorize('Which Pokémon has the same base', Style.BOLD)} "
             f"{colorize(stat_name, Style.BOLD, Style.CYAN)} "
             f"{colorize(f'({self.target_value})', Style.BOLD, Style.YELLOW)} "
-            f"{colorize('as', Style.BOLD)} {colorize(self.pokemon.name.name, Style.BOLD, Style.YELLOW)}{colorize(':', Style.BOLD)}"
-        )
+            f"{colorize('as', Style.BOLD)} {colorize(self.pokemon.name.name, Style.BOLD, Style.YELLOW)}{colorize('?', Style.BOLD)}"
+        ]
+        for label, name in zip(OPTION_LABELS, self.options):
+            lines.append(f"  {label}) {name}")
+        lines.append(colorize("(Enter a letter, number, or name)", Style.DIM))
+        return "\n".join(lines)
 
     def get_correct_answer(self) -> str:
-        db = Database.get_pokemon()
-        pkmn_name_str = str(self.pokemon.name).lower()
-        matches = []
-        for p in db.list():
-            if str(p.name).lower() == pkmn_name_str or p.base_id == self.pokemon.base_id:
-                continue
-            if p.stats.get_stat(self.stat) == self.target_value:
-                matches.append(p.name)
-        if matches:
-            sample = ", ".join(sorted(set(matches))[:5])
-            return f"Examples with base {format_stat_name(self.stat)} {self.target_value}: {sample}"
-        return f"Any Pokémon with base {format_stat_name(self.stat)} of {self.target_value}"
+        return f"{self.correct_option} (Base {format_stat_name(self.stat)} {self.target_value})"
+
+    def get_feedback(self, result: PromptResult) -> str:
+        return self.get_correct_answer()
 
     def validate(self, answer: str) -> PromptResult:
-        raw = answer.strip().lower()
+        raw = answer.strip()
         if not raw:
             return PromptResult.as_incorrect(answer)
 
-        # Do not allow naming the exact same pokemon
-        pkmn_name_str = str(self.pokemon.name).lower()
-        pkmn_showdown_str = str(self.pokemon.showdown_name).lower()
-        if raw == pkmn_name_str or raw == pkmn_showdown_str:
-            return PromptResult.as_incorrect(answer)
-
-        db = Database.get_pokemon()
-        # Find candidate pokemon
-        candidates = list(db.name(answer.strip()))
-        if not candidates:
-            # Try case-insensitive matching across database
-            for p in db.list():
-                if str(p.name).lower() == raw or str(p.showdown_name).lower() == raw:
-                    candidates.append(p)
+        lowered = raw.lower()
+        index: int | None = None
+        if len(lowered) == 1 and lowered in OPTION_LABELS.lower()[:len(self.options)]:
+            index = OPTION_LABELS.lower().index(lowered)
+        elif lowered.isdigit() and 1 <= int(lowered) <= len(self.options):
+            index = int(lowered) - 1
+        else:
+            norm = normalize_name(raw)
+            for i, name in enumerate(self.options):
+                if normalize_name(name) == norm:
+                    index = i
                     break
 
-        if not candidates:
+        if index is None:
             return PromptResult.as_incorrect(answer)
-
-        candidate = candidates[0]
-        # Ensure it's not the same base Pokémon
-        if candidate.base_id == self.pokemon.base_id and str(candidate.name).lower() == pkmn_name_str:
-            return PromptResult.as_incorrect(answer)
-
-        if candidate.stats.get_stat(self.stat) == self.target_value:
+        if self.options[index] == self.correct_option:
             return PromptResult.as_correct(answer)
-
         return PromptResult.as_incorrect(answer)
 
 
@@ -209,14 +207,14 @@ class AdjustedStatValuePrompt(BaseStatsQuizPrompt):
                 f"{colorize('What is', Style.BOLD)} {colorize(stat_name, Style.BOLD, Style.CYAN)} "
                 f"{colorize('of', Style.BOLD)} {colorize(self.pokemon.name.name, Style.BOLD, Style.YELLOW)} "
                 f"{colorize(f'(Base {self.base_stat})', Style.DIM)} "
-                f"{colorize('with', Style.BOLD)} {colorize(f'{ev_points} StatPoints ({ev_points * 8} EVs)', Style.BOLD)} "
+                f"{colorize('with', Style.BOLD)} {colorize(f'{ev_points} stat points', Style.BOLD)} "
                 f"{colorize('and a', Style.BOLD)} {colorize(nature_name, Style.MAGENTA)} "
                 f"{colorize('nature?', Style.BOLD)}"
             )
         else:
             return (
                 f"What is the {stat_name} of a Pokémon with "
-                f"Base {self.base_stat}, {ev_points} StatPoints ({ev_points * 8} EVs), "
+                f"Base {self.base_stat}, {ev_points} stat points, "
                 f"and a {nature_name} nature?"
             )
 
@@ -350,7 +348,6 @@ class EVForStatPrompt(BaseStatsQuizPrompt):
 
 
 class BaseStatsQuiz(NumberedQuiz[BaseStatsQuizPrompt]):
-
     PROMPT_TYPES = {
         "exact": ExactBaseStatPrompt,
         "compare": CompareBaseStatPrompt,
@@ -369,12 +366,12 @@ class BaseStatsQuiz(NumberedQuiz[BaseStatsQuizPrompt]):
     TITLE_INDENT = 10
 
     def __init__(
-        self,
-        pokemon_pool: Sequence[PokemonData] | None = None,
-        question_count: int = 10,
-        allowed_prompt_types: Sequence[str] | None = None,
-        inp=None,
-        outp=None,
+            self,
+            pokemon_pool: Sequence[PokemonData] | None = None,
+            question_count: int = 10,
+            allowed_prompt_types: Sequence[str] | None = None,
+            inp=None,
+            outp=None,
     ):
         super().__init__(
             question_count=question_count,
@@ -386,8 +383,8 @@ class BaseStatsQuiz(NumberedQuiz[BaseStatsQuizPrompt]):
             self.pokemon_pool = list(pokemon_pool)
         else:
             provider = UsageDataProvider()
-            top = provider.top_usage(limit=100)
-            self.pokemon_pool = [e.pokemon for e in top if e.pokemon is not None]
+            top = provider.top_common_sets(limit=100)
+            self.pokemon_pool = [e.entry.pokemon for e in top if e.entry is not None and e.entry.pokemon is not None]
 
     def _generate_prompt(self) -> BaseStatsQuizPrompt:
         active_types = [t for t in self.allowed_prompt_types if t in self.PROMPT_WEIGHTS]
@@ -395,26 +392,27 @@ class BaseStatsQuiz(NumberedQuiz[BaseStatsQuizPrompt]):
 
         prompt_type = random.choices(active_types, weights=active_weights, k=1)[0]
 
-        p = random.choice(self.pokemon_pool)
-        stat = pick_weighted_stat()
+        if prompt_type == "same":
+            return self._generate_same_prompt()
 
+        p, stat = self._pick_pokemon_and_stat()
         generators = {
             "exact": self._generate_exact,
             "compare": self._generate_compare,
-            "same": self._generate_same,
             "adjusted": self._generate_adjusted,
             "ev_calc": self._generate_ev_calc,
         }
         return generators[prompt_type](p, stat)
 
+    def _pick_pokemon_and_stat(self) -> tuple[PokemonData, Stat]:
+        while True:
+            p = random.choice(self.pokemon_pool)
+            stat = pick_weighted_stat()
+            if not is_stat_ignored(p, stat):
+                return p, stat
+
     @staticmethod
     def _generate_exact(p: PokemonData, stat: Stat) -> BaseStatsQuizPrompt:
-        for i in range(10):
-            if (stat == Stat.ATTACK and p.stats.get_stat(Stat.ATTACK) + 20 < p.stats.get_stat(Stat.SP_ATTACK)) \
-                    or (stat == Stat.SP_ATTACK and p.stats.get_stat(Stat.SP_ATTACK) + 20 < p.stats.get_stat(Stat.ATTACK)):
-                stat = random.choice(list(NUMBER_STATS))
-            else:
-                break
         return ExactBaseStatPrompt(pokemon=p, stat=stat)
 
     def _generate_compare(self, p: PokemonData, stat: Stat) -> BaseStatsQuizPrompt:
@@ -423,10 +421,46 @@ class BaseStatsQuiz(NumberedQuiz[BaseStatsQuizPrompt]):
             p2 = random.choice(self.pokemon_pool)
         return CompareBaseStatPrompt(pokemon1=p, pokemon2=p2, stat=stat)
 
+    def _generate_same_prompt(self) -> BaseStatsQuizPrompt:
+        # all_pokemon = list(Database.get_pokemon().list())
+        while True:
+            p = random.choice(self.pokemon_pool)
+            first = pick_weighted_stat()
+            stats = [first] + [s for s in NUMBER_STATS if s != first]
+            for stat in stats:
+                if is_stat_ignored(p, stat):
+                    continue
+                built = self._build_same_options(p, stat, self.pokemon_pool)
+                if built is None:
+                    continue
+                correct, distractors = built
+                options = [correct] + distractors
+                random.shuffle(options)
+                return SameBaseStatPrompt(
+                    pokemon=p,
+                    stat=stat,
+                    target_value=p.stats.get_stat(stat),
+                    options=[o.name.name for o in options],
+                    correct_option=correct.name.name,
+                )
+
     @staticmethod
-    def _generate_same(p: PokemonData, stat: Stat) -> BaseStatsQuizPrompt:
-        val = p.stats.get_stat(stat)
-        return SameBaseStatPrompt(pokemon=p, stat=stat, target_value=val)
+    def _build_same_options(
+            p: PokemonData,
+            stat: Stat,
+            all_pokemon: list[PokemonData],
+    ) -> tuple[PokemonData, list[PokemonData]] | None:
+        target = p.stats.get_stat(stat)
+        others = [q for q in all_pokemon if q.showdown_name != p.showdown_name]
+        valid = [q for q in others if q.stats.get_stat(stat) == target]
+        if not valid:
+            return None
+        near = [q for q in others if q.stats.get_stat(stat) != target]
+        near.sort(key=lambda q: abs(q.stats.get_stat(stat) - target))
+        nearest = near[:20]
+        if len(nearest) < 4:
+            return None
+        return random.choice(valid), random.sample(nearest, 4)
 
     @staticmethod
     def _generate_adjusted(p: PokemonData, stat: Stat) -> BaseStatsQuizPrompt:
@@ -466,4 +500,3 @@ class BaseStatsQuiz(NumberedQuiz[BaseStatsQuizPrompt]):
             level=50,
             iv=31,
         )
-

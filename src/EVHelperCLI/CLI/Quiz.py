@@ -54,43 +54,12 @@ def add_quiz_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def run_quiz_interactive(quiz, quiz_name: str = "Quiz"):
-    print("\n" + "=" * 50)
-    print(f"  Starting {quiz_name} ({quiz.question_count} questions)")
-    print("  (Type 'quit' or 'exit' at any time to finish early)")
-    print("=" * 50 + "\n")
+    quiz.output.render("\n" + "=" * 50)
+    quiz.output.render(f"  Starting {quiz_name} ({quiz.question_count} questions)")
+    quiz.output.render("  (Type 'quit' or 'exit' at any time to finish early)")
+    quiz.output.render("=" * 50 + "\n")
 
-    question_num = 0
-    for prompt in quiz:
-        question_num += 1
-        print(f"[Question {question_num}/{quiz.question_count}]")
-        print(prompt.get_prompt())
-        try:
-            answer = input("\nYour answer: ").strip()
-        except (KeyboardInterrupt, EOFError):
-            print("\nQuiz interrupted.")
-            break
-
-        if answer.lower() in ("quit", "exit"):
-            print("Exiting quiz early...")
-            break
-
-        result = prompt.validate(answer)
-        quiz.set_result(result)
-
-        if result.result == AnswerType.CORRECT:
-            print(f"✓ Correct! (+{result.value:.1f} pts)")
-        elif result.result == AnswerType.PARTIAL:
-            print(f"~ Partial Credit! (+{result.value:.2f} pts)")
-        else:
-            print(f"✗ Incorrect (+0.0 pts)")
-
-        feedback = prompt.get_feedback(result)
-        if feedback:
-            print(feedback)
-
-        print()
-
-    print("\n" + quiz.render_score())
+    quiz.run()
 
 
 def select_quiz_interactive() -> str:
