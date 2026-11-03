@@ -157,6 +157,9 @@ class DamageRangePrompt(DamageCalcQuizPrompt):
         actual_max_pct = (actual_max_hp / def_hp) * 100.0
         return f"{actual_min_hp}-{actual_max_hp} HP ({actual_min_pct:.1f} - {actual_max_pct:.1f}%)"
 
+    def get_feedback(self, result: PromptResult) -> str:
+        return self.get_correct_answer()
+
     def validate(self, answer: str) -> PromptResult:
         raw = answer.strip()
         numbers = [float(x) for x in re.findall(r"\b\d+(?:\.\d+)?\b", raw)]

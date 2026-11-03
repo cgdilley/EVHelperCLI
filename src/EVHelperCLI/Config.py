@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 from SprelfPkmn.Objects import Regulation
 from SprelfJSON import JSONModel, YAMLHelpers, DefaultFactory
@@ -32,7 +32,7 @@ class Config(JSONModel):
     color_enabled: bool | None = None
 
     """Global configuration."""
-    _CONFIG: Config | None = None
+    _CONFIG: Optional["Config"] = None
 
     @classmethod
     def get(cls) -> Config:
